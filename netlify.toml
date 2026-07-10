@@ -1,0 +1,18 @@
+[build]
+  publish = "."
+
+# The site is fully static: HTML + docx template + a couple of JS files.
+# No build step required.
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Ensure the docx template is served with the correct MIME type
+[[headers]]
+  for = "/*.docx"
+  [headers.values]
+    Content-Type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"

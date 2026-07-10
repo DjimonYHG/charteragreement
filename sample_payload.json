@@ -1,0 +1,86 @@
+{
+  "vessel": {
+    "name": "JEE JAM",
+    "reg": "23199",
+    "length": "55 FT",
+    "type": "SUNSEEKER SUPERHAWK"
+  },
+  "owner": {
+    "company_name": "BRUNISA CHARTER LTD",
+    "reg_state": "N/A",
+    "address": "IL - PIAZZETTA A, SUITE 52, LEVEL -5, TOWER ROAD, SLIEMA, MALTA",
+    "signatory": "Charlo Briffa"
+  },
+  "charterer": {
+    "full_name": "James Whitfield",
+    "reg_state": "N/A",
+    "vat": "N/A",
+    "auth_signatory": "N/A",
+    "billing": "27 Pembroke Square, Kensington, London, W8 6PB, United Kingdom"
+  },
+  "agent": {
+    "company_name": "Rush Leisure Limited",
+    "reg_state": "C 50164",
+    "broker": "Djimon Fenech",
+    "mobile": "+356 9931 0002",
+    "email": "djimon.fenech@yachthubgroup.com"
+  },
+  "co_agent": {
+    "company_name": "Mediterranean Yacht Concierge S.r.l.",
+    "reg_state": "MI-2019-08542, Italy",
+    "vat": "IT08542019015",
+    "individual_name": "N/A",
+    "mobile": "+39 02 7788 1234"
+  },
+  "contract_date": "23 May 2026",
+  "charter": {
+    "from_date": "24 May 2026",
+    "from_time": "10:00",
+    "to_date": "24 May 2026",
+    "to_time": "18:00",
+    "place_delivery": "Portomaso Marina",
+    "place_redelivery": "Portomaso Marina",
+    "cruising_area": "Maltese Waters",
+    "itinerary": "Departure from Portomaso at 10:00, cruise to Comino with stops at Crystal Lagoon and Blue Lagoon, return to Portomaso by 18:00."
+  },
+  "guest_allowance": {"day_charters": "6", "sleeping_on_board": "0"},
+  "crew": {"captain": true, "deckhand": false, "stewardess": true, "chef": false},
+  "fees": {
+    "charter": 5200.00,
+    "delivery": 0.00,
+    "apa": 1850.00,
+    "security": 0.00,
+    "deposit": 5200.00,
+    "deposit_due": "23 May 2026",
+    "balance_due": "24 May 2026"
+  },
+  "signature_date": "23 May 2026",
+  "special_conditions": [],
+  "time_slot": "full_day",
+  "guests": {"adults": "4", "children_count": "2", "children_ages": "10, 8", "num_guests": "6"},
+  "allergies": "Gluten Allergy",
+  "dietary": {"gluten_free": 1, "vegetarian": 0, "vegan": 0, "other": []},
+  "chef_confirmed": true,
+  "special_occasion": "Birthday Surprise",
+  "main_contact": {
+    "name": "James Whitfield",
+    "mobile": "+44 7700 900123",
+    "email": "james.whitfield@example.com"
+  },
+  "beverages": {
+    "champagne": "2 x Moet & Chandon Brut Imperial, 75cl",
+    "wine": "2 x Sauvignon Blanc, 2 x Provence Rose",
+    "beers": "6 x Peroni Nastro Azzurro, 330ml",
+    "spirits": "1 x Hendrick's Gin, 70cl",
+    "mixers": "6 x Schweppes Tonic, 200ml",
+    "other": "N/A"
+  },
+  "watersports": {
+    "seabob": true,
+    "jet_ski": false,
+    "sup": false,
+    "fliteboard": false,
+    "axopar_29": false,
+    "axopar_37": false
+  }
+}
