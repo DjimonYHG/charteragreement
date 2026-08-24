@@ -1,0 +1,492 @@
+/* ============================================================================
+ * memo-gen.js
+ *
+ * Generates the Charter Memorandum HTML from a form payload and opens it
+ * in a new browser tab where the crew can view, print or save to PDF.
+ *
+ * Public API:
+ *   generateMemoHtml(payload) -> string
+ *   openMemo(payload)         -> opens a new tab with the memo
+ * ============================================================================
+ */
+
+(function (global) {
+  'use strict';
+
+  const MEMO_STYLES = `
+    :root {
+      --navy: #000028;
+      --navy-70: rgba(0,0,40,0.7);
+      --navy-50: rgba(0,0,40,0.5);
+      --navy-30: rgba(0,0,40,0.3);
+      --navy-10: rgba(0,0,40,0.1);
+      --navy-05: rgba(0,0,40,0.05);
+      --mint: #00D7A0;
+      --white: #ffffff;
+      --sans: Calibri, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; font-family: var(--sans); color: var(--navy);
+      background: #eaeaef; -webkit-font-smoothing: antialiased; font-size: 14px; line-height: 1.5; }
+    body { padding: 16px 12px; }
+    .page { max-width: 820px; margin: 0 auto; background: var(--white);
+      box-shadow: 0 4px 24px rgba(0,0,40,0.08); padding: 24px 20px; }
+
+    .header { display: flex; justify-content: space-between; align-items: flex-start;
+      gap: 16px; padding-bottom: 16px; border-bottom: 2px solid var(--navy); margin-bottom: 24px; }
+    .brand { font-weight: 700; font-size: 14px; letter-spacing: 0.14em; }
+    .doc-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em;
+      color: var(--navy-50); margin-top: 4px; }
+    .meta { text-align: right; font-size: 11px; color: var(--navy-70); }
+    .meta__ref { font-weight: 600; color: var(--navy); font-size: 12px; margin-bottom: 2px; }
+
+    .section { margin-bottom: 22px; page-break-inside: avoid; }
+    .section__title { font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.14em; color: var(--navy); margin: 0 0 10px 0;
+      padding-bottom: 6px; border-bottom: 1px solid var(--navy-10); }
+
+    /* Stacked data layout: label above value. Reads well at any width. */
+    .data-grid { margin: 0; padding: 0; }
+    .data-grid dt {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--navy-50);
+      margin-top: 12px;
+    }
+    .data-grid dt:first-of-type { margin-top: 0; }
+    .data-grid dd {
+      margin: 3px 0 0 0;
+      font-size: 14px;
+      color: var(--navy);
+      word-wrap: break-word;
+    }
+
+    /* On wider screens (tablet+), display in two label|value columns */
+    @media (min-width: 620px) {
+      body { padding: 40px 20px; }
+      .page { padding: 48px 56px; }
+      .data-grid {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        column-gap: 24px;
+        row-gap: 10px;
+        align-items: baseline;
+      }
+      .data-grid dt {
+        font-size: 11px;
+        margin-top: 0;
+        padding-top: 2px;
+      }
+      .data-grid dd {
+        margin: 0;
+        font-size: 13px;
+      }
+    }
+
+    .menu-card { background: var(--navy-05); border-left: 3px solid var(--mint);
+      padding: 12px 14px; margin-bottom: 10px; border-radius: 0 4px 4px 0; }
+    .menu-card__name { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+    .menu-card__items { font-size: 13px; color: var(--navy-70); }
+    .menu-card__serving { font-size: 12px; color: var(--navy-50); font-style: italic; margin-top: 6px; }
+
+    .equip-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .equip-tag { background: var(--navy-05); border: 1px solid var(--navy-10);
+      padding: 6px 12px; border-radius: 4px; font-size: 13px; font-weight: 500; }
+
+    .crew-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+    .crew-pill { display: inline-flex; align-items: center; padding: 6px 12px;
+      border: 1px solid var(--navy-10); border-radius: 999px; font-size: 13px; color: var(--navy-30); }
+    .crew-pill--on { border-color: var(--mint); color: var(--navy); }
+    /* Using a radial-gradient (a "background image") rather than a plain
+       background-color: browsers strip background colours when printing to
+       save ink, but images survive by default. */
+    .crew-pill__dot { width: 8px; height: 8px; border-radius: 50%;
+      background-image: radial-gradient(circle, #C7C7CE 0 100%);
+      background-color: #C7C7CE;
+      margin-right: 8px; flex-shrink: 0; }
+    .crew-pill--on .crew-pill__dot {
+      background-image: radial-gradient(circle, #00D7A0 0 100%);
+      background-color: #00D7A0;
+    }
+
+    .signoff { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--navy-10); }
+    .signoff__grid { display: grid; grid-template-columns: 1fr; gap: 24px; }
+    @media (min-width: 620px) {
+      .signoff__grid { grid-template-columns: 1fr 1fr; }
+    }
+    .signoff__line { border-bottom: 1px solid var(--navy-30); padding-bottom: 4px; height: 32px; }
+    .signoff__label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--navy-50); margin-top: 4px; }
+
+    .empty-note { font-style: italic; color: var(--navy-30); font-size: 13px; }
+
+    /* Action toolbar at the top of the memo (Save as PDF, Share). Sticky so it
+       stays reachable while scrolling. Hidden during print/save-to-PDF. */
+    .toolbar {
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(255,255,255,0.98);
+      border-bottom: 1px solid var(--navy-10);
+      padding: 12px 16px;
+      display: flex; gap: 8px; flex-wrap: wrap;
+      margin: -16px -12px 16px -12px;
+    }
+    @media (min-width: 620px) {
+      .toolbar { margin: -40px -20px 24px -20px; }
+    }
+    .tb-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 500;
+      background: var(--navy); color: var(--white); border: none; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tb-btn--ghost { background: transparent; color: var(--navy); border: 1px solid var(--navy-10); }
+    .tb-btn:active { transform: translateY(1px); }
+
+    @media print {
+      @page { margin: 14mm 12mm; }
+      html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
+      body { font-size: 11px; line-height: 1.4; }
+      .toolbar { display: none !important; }
+      .page { box-shadow: none !important; margin: 0 !important; padding: 0 !important;
+              max-width: 100% !important; }
+      .header { padding-bottom: 12px; margin-bottom: 16px; }
+      .brand { font-size: 12px; }
+      .section { margin-bottom: 14px; page-break-inside: avoid; break-inside: avoid; }
+      .section__title { font-size: 10px; margin-bottom: 6px; padding-bottom: 4px; }
+      .data-grid dt { font-size: 9px; margin-top: 8px; }
+      .data-grid dd { font-size: 12px; }
+      @media (min-width: 620px) {
+        .data-grid dt { font-size: 10px; }
+        .data-grid dd { font-size: 11px; }
+      }
+      .signoff { page-break-inside: avoid; break-inside: avoid; margin-top: 24px; padding-top: 16px; }
+      .crew-pill { padding: 4px 10px; font-size: 11px; }
+      .crew-pill__dot {
+        background-image: radial-gradient(circle, #C7C7CE 0 100%) !important;
+        background-color: #C7C7CE !important;
+      }
+      .crew-pill--on .crew-pill__dot {
+        background-image: radial-gradient(circle, #00D7A0 0 100%) !important;
+        background-color: #00D7A0 !important;
+      }
+      .equip-tag { padding: 4px 10px; font-size: 11px; }
+      /* Force colour-accurate printing so the mint accents survive when the
+         user chooses "background graphics" in the print dialog. */
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    }
+  `;
+
+  function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function get(p, path, fallback) {
+    if (fallback === undefined) fallback = '';
+    const parts = path.split('.');
+    let cur = p;
+    for (const k of parts) {
+      if (cur === null || typeof cur !== 'object' || !(k in cur)) return fallback;
+      cur = cur[k];
+    }
+    return (cur === null || cur === undefined || cur === '') ? fallback : cur;
+  }
+
+  function row(label, value, empty) {
+    const v = value ? esc(value) : ('<span class="empty-note">' + (empty || 'Not provided') + '</span>');
+    return '<dt>' + label + '</dt><dd>' + v + '</dd>';
+  }
+
+  function formatDietary(payload) {
+    const bits = [];
+    const gf = parseInt(get(payload, 'dietary.gluten_free', 0) || 0, 10);
+    const veg = parseInt(get(payload, 'dietary.vegetarian', 0) || 0, 10);
+    const vgn = parseInt(get(payload, 'dietary.vegan', 0) || 0, 10);
+    if (gf > 0) bits.push('Gluten Free \u00b7 ' + gf + ' ' + (gf === 1 ? 'person' : 'persons'));
+    if (veg > 0) bits.push('Vegetarian \u00b7 ' + veg + ' ' + (veg === 1 ? 'person' : 'persons'));
+    if (vgn > 0) bits.push('Vegan \u00b7 ' + vgn + ' ' + (vgn === 1 ? 'person' : 'persons'));
+    const other = get(payload, 'dietary.other', []) || [];
+    for (const o of other) if (o && o.trim()) bits.push(o.trim());
+    return bits.length ? bits.join(', ') : '';
+  }
+
+  function crewSection(payload) {
+    const crew = ['captain', 'deckhand', 'stewardess', 'chef'];
+    return crew.map(c => {
+      const on = !!get(payload, 'crew.' + c, false);
+      const label = c.charAt(0).toUpperCase() + c.slice(1);
+      return '<div class="crew-pill' + (on ? ' crew-pill--on' : '') + '"><span class="crew-pill__dot"></span>' + label + '</div>';
+    }).join('');
+  }
+
+  function watersportsSection(payload) {
+    const map = {
+      seabob: 'Seabob',
+      jet_ski: 'Jet Ski',
+      sup: "SUP's",
+      fliteboard: 'FliteBoard',
+      axopar_29: 'Axopar 29',
+      axopar_37: 'Axopar 37',
+    };
+    const on = [];
+    for (const k in map) {
+      if (get(payload, 'watersports.' + k, false)) on.push(map[k]);
+    }
+    if (!on.length) return '<div class="empty-note">No watersports equipment requested.</div>';
+    return on.map(name => '<span class="equip-tag">' + esc(name) + '</span>').join('');
+  }
+
+  function menuBlocks(payload) {
+    const menus = payload.menus || [];
+    if (!menus.length) return '';
+    return menus.map((m, i) => {
+      const parts = [m.name, m.items, m.serving].filter(x => x && String(x).trim());
+      if (!parts.length) return '';
+      const value = parts.map(esc).join('<br>');
+      return '<dt>Menu ' + (i + 1) + '</dt><dd>' + value + '</dd>';
+    }).join('');
+  }
+
+  function beveragesSection(payload) {
+    const cats = [
+      ['champagne', 'Champagne'],
+      ['wine', 'Wine'],
+      ['beers', 'Beers'],
+      ['spirits', 'Spirits'],
+      ['mixers', 'Mixers'],
+      ['other', 'Other'],
+    ];
+    const rows = [];
+    for (const [k, name] of cats) {
+      const v = get(payload, 'beverages.' + k);
+      if (v && v !== 'N/A') rows.push(row(name, v));
+    }
+    if (!rows.length) return '<div class="empty-note">No beverage order.</div>';
+    return '<dl class="data-grid">' + rows.join('') + '</dl>';
+  }
+
+  function generateMemoHtml(payload) {
+    const charterRef = get(payload, 'charter_ref', 'Draft');
+    const chartererName = get(payload, 'charterer.full_name', 'Charter');
+    const from = get(payload, 'charter.from_date');
+    const to = get(payload, 'charter.to_date');
+    const dateRange = from + (to && to !== from ? ' \u2013 ' + to : '');
+
+    const catererEnabled = get(payload, 'catering.enabled', undefined);
+    const catererName = get(payload, 'catering.supplier_name');
+    const catererContact = get(payload, 'catering.supplier_contact');
+    const catererNotes = get(payload, 'catering.notes');
+    const drinksSupplierEnabled = get(payload, 'drinks.enabled', undefined);
+    const drinksSupplierName = get(payload, 'drinks.supplier_name');
+    const drinksSupplierContact = get(payload, 'drinks.supplier_contact');
+    const chefConfirmed = get(payload, 'chef_confirmed', false);
+    const chefName = get(payload, 'chef.name');
+    const chefContact = get(payload, 'chef.contact');
+    const chefNotes = get(payload, 'chef.notes');
+    const clientsOwnDrinks = get(payload, 'clients_own_drinks', false);
+    const menuCount = get(payload, 'menu_count');
+    const menuImage = get(payload, 'menu_image');
+    const menuOrder = get(payload, 'menu_order');
+
+    // Renders a Yes / No / Not specified row for a toggle-driven field.
+    // "detailsIfYes" is what shows next to the label when the toggle is Yes.
+    function toggleRow(label, enabled, detailsIfYes) {
+      if (enabled === true) {
+        return row(label, detailsIfYes || 'Yes');
+      }
+      if (enabled === false) {
+        return '<dt>' + label + '</dt><dd>No</dd>';
+      }
+      return '<dt>' + label + '</dt><dd><span class="empty-note">Not specified</span></dd>';
+    }
+
+    const dietaryStr = formatDietary(payload);
+    const menusHtml = menuBlocks(payload);
+
+    return '<!DOCTYPE html>' +
+'<html lang="en"><head>' +
+'<meta charset="UTF-8">' +
+'<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+'<title>Charter Memorandum \u00b7 ' + esc(chartererName) + '</title>' +
+'<style>' + MEMO_STYLES + '</style>' +
+'</head><body><div class="page">' +
+
+'<div class="toolbar">' +
+'  <button class="tb-btn" onclick="window.print()">Save as PDF</button>' +
+'  <button class="tb-btn tb-btn--ghost" id="tbShare">Share</button>' +
+'  <button class="tb-btn tb-btn--ghost" onclick="window.close()">Close</button>' +
+'</div>' +
+'<script>' +
+'  (function(){' +
+'    var b = document.getElementById("tbShare");' +
+'    if (!b) return;' +
+'    if (!navigator.share) { b.style.display = "none"; return; }' +
+'    b.addEventListener("click", function(){' +
+'      var title = document.title || "Charter Memorandum";' +
+'      navigator.share({ title: title, text: title, url: window.location.href })' +
+'        .catch(function(){});' +
+'    });' +
+'  })();' +
+'</' + 'script>' +
+
+'<div class="header">' +
+'  <div>' +
+'    <div class="brand">YACHTHUB GROUP</div>' +
+'    <div class="doc-title">Charter Memorandum</div>' +
+'  </div>' +
+'  <div class="meta">' +
+'    <div class="meta__ref">' + esc(charterRef) + '</div>' +
+'    <div>' + esc(dateRange) + '</div>' +
+'    <div>' + esc(get(payload, 'vessel.name')) + '</div>' +
+'  </div>' +
+'</div>' +
+
+'<section class="section">' +
+'  <h2 class="section__title">Charter Overview</h2>' +
+'  <dl class="data-grid">' +
+    row('Vessel', get(payload, 'vessel.name')) +
+    row('Charter Date', dateRange) +
+    row('Time', get(payload, 'charter.from_time') && get(payload, 'charter.to_time')
+        ? get(payload, 'charter.from_time') + ' \u2013 ' + get(payload, 'charter.to_time')
+        : '') +
+    row('Place of Delivery', get(payload, 'charter.place_delivery')) +
+    row('Place of Re-Delivery', get(payload, 'charter.place_redelivery')) +
+    row('Cruising Area', get(payload, 'charter.cruising_area')) +
+    row('Itinerary', get(payload, 'charter.itinerary')) +
+'  </dl>' +
+'</section>' +
+
+'<section class="section">' +
+'  <h2 class="section__title">Charterer &amp; Main Contact</h2>' +
+'  <dl class="data-grid">' +
+    row('Charterer', get(payload, 'charterer.full_name')) +
+    row('Mobile', get(payload, 'charterer.mobile'), 'Not provided') +
+    row('Email', get(payload, 'charterer.email'), 'Not provided') +
+'  </dl>' +
+'</section>' +
+
+'<section class="section">' +
+'  <h2 class="section__title">Guests</h2>' +
+'  <dl class="data-grid">' +
+    row('Number of Guests', get(payload, 'guests.num_guests')) +
+    row('Adults', get(payload, 'guests.adults')) +
+    row('Children', get(payload, 'guests.children_count')) +
+    row('Ages of Children', get(payload, 'guests.children_ages'), '\u2014') +
+    row('Allergies', get(payload, 'allergies'), 'None reported') +
+    row('Dietary Requirements', dietaryStr, 'None') +
+'  </dl>' +
+'</section>' +
+
+'<section class="section">' +
+'  <h2 class="section__title">Food</h2>' +
+'  <dl class="data-grid">' +
+
+    // Chef on Board — always a Yes/No row. Extra details rows only when confirmed.
+    row('Chef on Board', chefConfirmed ? 'Yes' : 'No') +
+    (chefConfirmed && chefName ? row('Chef name', chefName) : '') +
+    (chefConfirmed && chefContact ? row('Chef contact', chefContact) : '') +
+    (chefConfirmed && chefNotes ? row('Chef notes', chefNotes) : '') +
+
+    // Outside Caterer — only show anything at all when Yes is selected.
+    (catererEnabled === true
+      ? (row('Outside Caterer', 'Yes') +
+         (catererName ? row('Caterer name', catererName) : '') +
+         (catererContact ? row('Caterer contact', catererContact) : '') +
+         (catererNotes ? row('Caterer notes', catererNotes) : ''))
+      : '') +
+
+    // Menu order from Yachthub — only when there's content.
+    (menuOrder ? row('Menu order from Yachthub', menuOrder) : '') +
+
+    // Shared menu details — count + blocks only when content exists.
+    (menuCount ? row('Number of menus', String(menuCount)) : '') +
+    menusHtml +
+'  </dl>' +
+    (menuImage
+      ? '<div style="margin-top:14px;">' +
+        '<div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--navy-50);margin-bottom:6px;">Menu Image</div>' +
+        '<img src="' + esc(menuImage) + '" alt="Menu" style="max-width:100%;border-radius:6px;border:1px solid var(--navy-10);"></div>'
+      : '') +
+'</section>' +
+
+'<section class="section">' +
+'  <h2 class="section__title">Beverages</h2>' +
+    (clientsOwnDrinks
+      ? '  <dl class="data-grid">' + row('Drinks arrangement', 'Clients are bringing their own drinks.') + '</dl>'
+      : (
+          '  <dl class="data-grid">' +
+          toggleRow('Drinks Supplier', drinksSupplierEnabled,
+            drinksSupplierEnabled === true
+              ? ((drinksSupplierName || 'Details not filled in') +
+                 (drinksSupplierContact ? ' \u00b7 ' + drinksSupplierContact : ''))
+              : null) +
+          '  </dl>' +
+          beveragesSection(payload)
+        )
+    ) +
+'</section>' +
+
+'<section class="section">' +
+'  <h2 class="section__title">Watersports Equipment Requested</h2>' +
+'  <div class="equip-list">' + watersportsSection(payload) + '</div>' +
+'</section>' +
+
+'<section class="section">' +
+'  <h2 class="section__title">Crew on Charter</h2>' +
+'  <div class="crew-grid">' + crewSection(payload) + '</div>' +
+'</section>' +
+
+'<section class="section">' +
+'  <h2 class="section__title">Special Instructions &amp; Notes</h2>' +
+'  <dl class="data-grid">' +
+    (get(payload, 'special_occasion')
+      ? row('Special Occasion', get(payload, 'special_occasion')) : '') +
+    (get(payload, 'notes.crew_internal')
+      ? row('Crew Notes', get(payload, 'notes.crew_internal')) : '') +
+'  </dl>' +
+'</section>' +
+
+'<div class="signoff">' +
+'  <div class="signoff__grid">' +
+'    <div><div class="signoff__line"></div><div class="signoff__label">Prepared by \u00b7 ' +
+      esc(get(payload, 'agent.broker')) + '</div></div>' +
+'    <div><div class="signoff__line"></div><div class="signoff__label">Received by (Captain)</div></div>' +
+'  </div>' +
+'</div>' +
+
+'</div></body></html>';
+  }
+
+  function openMemo(payload) {
+    const html = generateMemoHtml(payload);
+    const w = window.open('', '_blank');
+    if (!w) {
+      alert('Popup blocked. Enable popups for this site so the memorandum can open.');
+      return;
+    }
+    w.document.write(html);
+    w.document.close();
+  }
+
+  function downloadMemo(payload, filename) {
+    const html = generateMemoHtml(payload);
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  global.generateMemoHtml = generateMemoHtml;
+  global.openMemo = openMemo;
+  global.downloadMemo = downloadMemo;
+})(typeof window !== 'undefined' ? window : globalThis);
